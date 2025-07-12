@@ -46,16 +46,9 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         try {
             when (call.method) {
-                "file" -> {
-                    val pdfFilePath = call.arguments as String
-                    result.success(registerNewDoc(openFileDoc(pdfFilePath)))
-                }
-                "asset" -> {
-                    result.success(registerNewDoc(openAssetDoc(call.arguments as String)))
-                }
-                "data" -> {
-                    result.success(registerNewDoc(openDataDoc(call.arguments as ByteArray)))
-                }
+                "file" -> result.success(registerNewDoc(openFileDoc(call.arguments as String)))
+                "asset" -> result.success(registerNewDoc(openAssetDoc(call.arguments as String)))
+                "data" -> result.success(registerNewDoc(openDataDoc(call.arguments as ByteArray)))
                 "close" -> {
                     close(call.arguments as Int)
                     result.success(0)
@@ -64,26 +57,20 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                     val (renderer, id) = getDoc(call)
                     result.success(getInfo(renderer, id))
                 }
-                "page" -> {
-                    result.success(openPage(call.arguments as HashMap<String, Any>))
-                }
-                "render" -> {
-                    render(call.arguments as HashMap<String, Any>, result)
-                }
+                "page" -> result.success(openPage(call.arguments as HashMap<String, Any>))
+                "render" -> render(call.arguments as HashMap<String, Any>, result)
                 "releaseBuffer" -> {
                     releaseBuffer(call.arguments as Long)
                     result.success(0)
                 }
-                "allocTex" -> {
-                    result.success(allocTex())
-                }
+                "allocTex" -> result.success(allocTex())
                 "releaseTex" -> {
                     releaseTex(call.arguments as Int)
                     result.success(0)
                 }
                 "updateTex" -> {
                     updateTex(call.arguments as HashMap<String, Any>)
-                    result.success(0) // Explicit return value
+                    result.success(0)
                 }
                 else -> result.notImplemented()
             }
@@ -197,7 +184,7 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             bmp.copyPixelsToBuffer(buf)
             bmp.recycle()
 
-            return hashMapOf(
+            hashMapOf(
                 "docId" to docId,
                 "pageNumber" to pageNumber,
                 "x" to x,
@@ -261,7 +248,6 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
         if (tex == null) return -8
 
         val renderer = documents[docId]
-
         renderer.openPage(pageNumber - 1).use { page ->
             val fullWidth = args["fullWidth"] as? Double ?: page.width.toDouble()
             val fullHeight = args["fullHeight"] as? Double ?: page.height.toDouble()
@@ -289,7 +275,7 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
                 bmp.recycle()
                 surface.unlockCanvasAndPost(canvas)
             }
-            0 // Explicit return value
+            0 // Return value
         }
     }
 
