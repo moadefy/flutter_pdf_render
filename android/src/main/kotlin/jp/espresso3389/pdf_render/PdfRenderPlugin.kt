@@ -9,6 +9,7 @@ import android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT
 import android.os.ParcelFileDescriptor
 import android.os.ParcelFileDescriptor.MODE_READ_ONLY
 import android.util.SparseArray
+import android.view.Surface
 import androidx.annotation.NonNull
 import androidx.collection.LongSparseArray
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -21,7 +22,6 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.view.TextureRegistry
 import java.io.File
 import java.io.OutputStream
-import java.nio.Buffer
 import java.nio.ByteBuffer
 
 /** PdfRenderPlugin */
@@ -45,44 +45,45 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
         try {
-            when {
-                call.method == "file" -> {
+            when (call.method) {
+                "file" -> {
                     val pdfFilePath = call.arguments as String
                     result.success(registerNewDoc(openFileDoc(pdfFilePath)))
                 }
-                call.method == "asset" -> {
+                "asset" -> {
                     result.success(registerNewDoc(openAssetDoc(call.arguments as String)))
                 }
-                call.method == "data" -> {
+                "data" -> {
                     result.success(registerNewDoc(openDataDoc(call.arguments as ByteArray)))
                 }
-                call.method == "close" -> {
+                "close" -> {
                     close(call.arguments as Int)
                     result.success(0)
                 }
-                call.method == "info" -> {
+                "info" -> {
                     val (renderer, id) = getDoc(call)
                     result.success(getInfo(renderer, id))
                 }
-                call.method == "page" -> {
+                "page" -> {
                     result.success(openPage(call.arguments as HashMap<String, Any>))
                 }
-                call.method == "render" -> {
+                "render" -> {
                     render(call.arguments as HashMap<String, Any>, result)
                 }
-                call.method == "releaseBuffer" -> {
+                "releaseBuffer" -> {
                     releaseBuffer(call.arguments as Long)
                     result.success(0)
                 }
-                call.method == "allocTex" -> {
+                "allocTex" -> {
                     result.success(allocTex())
                 }
-                call.method == "releaseTex" -> {
+                "releaseTex" -> {
                     releaseTex(call.arguments as Int)
                     result.success(0)
                 }
-                call.method == "updateTex" -> {
-                    result.success(updateTex(call.arguments as HashMap<String, Any>))
+                "updateTex" -> {
+                    updateTex(call.arguments as HashMap<String, Any>)
+                    result.success(0) // Explicit return value
                 }
                 else -> result.notImplemented()
             }
@@ -130,12 +131,8 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun copyToTempFileAndOpenDoc(writeData: (OutputStream) -> Unit): PdfRenderer {
         val file = File.createTempFile("pdfr", null, null)
         try {
-            file.outputStream().use {
-                writeData(it)
-            }
-            file.inputStream().use {
-                return PdfRenderer(ParcelFileDescriptor.dup(it.fd))
-            }
+            file.outputStream().use { writeData(it) }
+            file.inputStream().use { return PdfRenderer(ParcelFileDescriptor.dup(it.fd)) }
         } finally {
             file.delete()
         }
@@ -218,11 +215,11 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun render(args: HashMap<String, Any>, result: Result) {
         var buf: ByteBuffer? = null
         var addr: Long = 0L
-        val m = renderOnByteBuffer(args) {
-            val (addr_, bbuf) = allocBuffer(it)
+        val m = renderOnByteBuffer(args) { size ->
+            val (addr_, bbuf) = allocBuffer(size)
             buf = bbuf
             addr = addr_
-            return@renderOnByteBuffer bbuf
+            bbuf
         }
         if (addr != 0L) {
             m?.set("addr", addr)
@@ -274,8 +271,7 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             val srcY = args["srcY"] as? Int ?: 0
             val backgroundFill = args["backgroundFill"] as? Boolean ?: true
 
-            if (width <= 0 || height <= 0)
-                return -7
+            if (width <= 0 || height <= 0) return -7
 
             val mat = Matrix()
             mat.setValues(floatArrayOf((fullWidth / page.width).toFloat(), 0f, -srcX.toFloat(), 0f, (fullHeight / page.height).toFloat(), -srcY.toFloat(), 0f, 0f, 1f))
@@ -287,15 +283,30 @@ class PdfRenderPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
             page.render(bmp, null, mat, RENDER_MODE_FOR_PRINT)
 
             tex.surfaceTexture()?.setDefaultBufferSize(width, height)
-
-            Surface(tex.surfaceTexture()).use {
-                val canvas = it.lockCanvas(Rect(0, 0, width, height))
+            Surface(tex.surfaceTexture()).use { surface ->
+                val canvas = surface.lockCanvas(Rect(0, 0, width, height))
                 canvas.drawBitmap(bmp, 0f, 0f, null)
                 bmp.recycle()
-                it.unlockCanvasAndPost(canvas)
+                surface.unlockCanvasAndPost(canvas)
             }
-            return 0
+            0 // Explicit return value
         }
+    }
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        // No implementation needed unless activity context is required
+    }
+
+    override fun onDetachedFromActivity() {
+        // No implementation needed unless cleanup is required
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        // No implementation needed unless reconfiguration is required
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        // No implementation needed unless cleanup is required
     }
 }
 
